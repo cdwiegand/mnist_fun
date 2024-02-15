@@ -25,7 +25,7 @@ namespace mnistfun
                     throw new Exception("Please download the MNIST images, as pngs, such that there is a path training\\0\\1.png (or training/0/1.png)");
 
                 Console.WriteLine($"Using MNIST images from {dirPath}... please wait!");
-                sourceData = LoadMNistData(System.IO.Path.Join(dirPath, "training"));
+                sourceData = LoadPngImages(System.IO.Path.Join(dirPath, "training"));
             }
             else if (args.Length == 1)
             {
@@ -34,53 +34,7 @@ namespace mnistfun
                     throw new Exception("File not found.");
                 string loadPath = System.IO.File.Exists(args[0]) ? args[0] : System.IO.Path.Combine(dirPath, args[0]);
 
-                // path to mnist csv or emnist csv
-                var tempData = new List<Tuple<int, double[]>>();
-                using (var reader = new System.IO.StreamReader(loadPath))
-                using (var csver = new CsvHelper.CsvReader(reader, System.Globalization.CultureInfo.InvariantCulture, false))
-                    while (csver.Read()) // no header!
-                    {
-                        int fieldMap = csver.GetField<int>(0);
-                        int[] pixelsInt = new int[csver.ColumnCount - 1];
-                        for (int i = 1; i < csver.ColumnCount; i++)
-                            pixelsInt[i] = csver.GetField<int>(i);
-                        double[] pixels = pixelsInt.Select(p => (double)p / 256).ToArray();
-                        tempData.Add(new Tuple<int, double[]>(fieldMap, pixels));
-                    }
-
-                // now if mnist, we're good, but if emnist we need to map the ints to their letters
-                if (tempData.Select(p => p.Item1).Max() >= 10)
-                {
-                    sourceData = new List<Tuple<char, double[]>>();
-                    // letters, remap using ascii
-                    foreach (var tup in tempData)
-                        if (tup.Item1 <= 9)
-                            sourceData.Add(new Tuple<char, double[]>(tup.Item1.ToString()[0], tup.Item2));
-                        else
-                        {
-                            int asciiLetter = 0;
-                            if (tup.Item1 <= 35) // is upper case letter
-                                asciiLetter = 55 + tup.Item1;
-                            else switch (tup.Item1)
-                                {
-                                    case 36: asciiLetter = 97; break;
-                                    case 37: asciiLetter = 98; break;
-                                    case 38: asciiLetter = 100; break;
-                                    case 39: asciiLetter = 101; break;
-                                    case 40: asciiLetter = 102; break;
-                                    case 41: asciiLetter = 103; break;
-                                    case 42: asciiLetter = 104; break;
-                                    case 43: asciiLetter = 110; break;
-                                    case 44: asciiLetter = 113; break;
-                                    case 45: asciiLetter = 114; break;
-                                    case 46: asciiLetter = 116; break;
-                                    default: throw new NotImplementedException();
-                                }
-                            sourceData.Add(new Tuple<char, double[]>(Convert.ToChar(asciiLetter), tup.Item2));
-                        }
-                }
-                else
-                    sourceData = tempData.Select(p => new Tuple<char, double[]>(p.Item1.ToString()[0], p.Item2)).ToList();
+                sourceData = LoadCsvFiles(loadPath);
             }
             else
                 throw new Exception("Don't know what to do!");
@@ -129,6 +83,59 @@ namespace mnistfun
             } while (epoch < 3 || !(Console.ReadLine() ?? "").Trim().ToLower().StartsWith("n"));
         }
 
+        private static List<Tuple<char, double[]>> LoadCsvFiles(string loadPath)
+        {
+            // path to mnist csv or emnist csv
+            var tempData = new List<Tuple<int, double[]>>();
+            using (var reader = new System.IO.StreamReader(loadPath))
+            using (var csver = new CsvHelper.CsvReader(reader, System.Globalization.CultureInfo.InvariantCulture, false))
+                while (csver.Read()) // no header!
+                {
+                    int fieldMap = csver.GetField<int>(0);
+                    int[] pixelsInt = new int[csver.ColumnCount - 1];
+                    for (int i = 1; i < csver.ColumnCount; i++)
+                        pixelsInt[i - 1] = csver.GetField<int>(i);
+                    double[] pixels = pixelsInt.Select(p => (double)p / 256).ToArray();
+                    tempData.Add(new Tuple<int, double[]>(fieldMap, pixels));
+                }
+
+            List<Tuple<char, double[]>> sourceData = new List<Tuple<char, double[]>>();
+            // now if mnist, we're good, but if emnist we need to map the ints to their letters
+            if (tempData.Select(p => p.Item1).Max() >= 10)
+            {
+                sourceData = new List<Tuple<char, double[]>>();
+                // letters, remap using ascii
+                foreach (var tup in tempData)
+                    if (tup.Item1 <= 9)
+                        sourceData.Add(new Tuple<char, double[]>(tup.Item1.ToString()[0], tup.Item2));
+                    else
+                    {
+                        int asciiLetter = 0;
+                        if (tup.Item1 <= 35) // is upper case letter
+                            asciiLetter = 55 + tup.Item1;
+                        else switch (tup.Item1)
+                            {
+                                case 36: asciiLetter = 97; break;
+                                case 37: asciiLetter = 98; break;
+                                case 38: asciiLetter = 100; break;
+                                case 39: asciiLetter = 101; break;
+                                case 40: asciiLetter = 102; break;
+                                case 41: asciiLetter = 103; break;
+                                case 42: asciiLetter = 104; break;
+                                case 43: asciiLetter = 110; break;
+                                case 44: asciiLetter = 113; break;
+                                case 45: asciiLetter = 114; break;
+                                case 46: asciiLetter = 116; break;
+                                default: throw new NotImplementedException();
+                            }
+                        sourceData.Add(new Tuple<char, double[]>(Convert.ToChar(asciiLetter), tup.Item2));
+                    }
+            }
+            else
+                sourceData = tempData.Select(p => new Tuple<char, double[]>(p.Item1.ToString()[0], p.Item2)).ToList();
+            return sourceData;
+        }
+
         private static string FindPath(Func<string, bool> Test)
         {
             string dirPath = System.Environment.CurrentDirectory;
@@ -137,7 +144,7 @@ namespace mnistfun
             return dirPath;
         }
 
-        private static List<Tuple<char, double[]>> LoadMNistData(string dirPath)
+        private static List<Tuple<char, double[]>> LoadPngImages(string dirPath)
         {
             var mnist_data = new List<Tuple<char, double[]>>();
             foreach (var subdir in System.IO.Directory.GetDirectories(dirPath))
@@ -318,24 +325,28 @@ namespace mnistfun
 
         public class EpochResult
         {
-            public EpochResult()
-            {
-                for (int i = 0; i < Numbers.Length; i++)
-                    Numbers[i] = new GuessResult();
-            }
-
             public int EpochGeneration;
-            public GuessResult[] Numbers = new GuessResult[10];
-            public int CountedCorrect => Numbers.Sum(p => p.CountedRight);
-            public int CountedWrong => Numbers.Sum(p => p.CountedWrong);
-            public void CountRight(int number) => Numbers[number].CountRight();
-            public void CountWrong(int number) => Numbers[number].CountWrong();
+            public Dictionary<char, GuessResult> Characters = new Dictionary<char, GuessResult>();
+            public int CountedCorrect => Characters.Select(p => p.Value.CountedRight).Sum();
+            public int CountedWrong => Characters.Select(p => p.Value.CountedWrong).Sum();
+            public void CountRight(char number)
+            {
+                if (!Characters.ContainsKey(number))
+                    Characters.Add(number, new GuessResult());
+                Characters[number].CountRight();
+            }
+            public void CountWrong(char number)
+            {
+                if (!Characters.ContainsKey(number))
+                    Characters.Add(number, new GuessResult());
+                Characters[number].CountWrong();
+            }
 
             public override string ToString()
             {
                 string ret = $"Epoch {EpochGeneration}:";
-                for (int i = 0; i < 10; i++)
-                    ret += $" {i}: {Numbers[i].PercentStr}";
+                foreach (char i in Characters.Keys)
+                    ret += $" {i}: {Characters[i].PercentStr}";
                 return ret;
             }
         }

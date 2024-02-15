@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "mnistfun": {
+      "commandName": "Project",
+      "commandLineArgs": "emnist-balanced-train.csv"
+    }
+  }
+}

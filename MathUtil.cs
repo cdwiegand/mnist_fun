@@ -17,7 +17,7 @@ namespace mnistfun
 
             for (int i = 0; i < data.GetLength(0); i++)
                 for (int j = 0; j < data.GetLength(1); j++)
-                    ret[j] += data[i, j] * columnMultipliers[j];
+                    ret[i] += data[i, j] * columnMultipliers[j];
             return ret;
         }
 

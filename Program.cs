@@ -19,16 +19,16 @@ namespace mnistfun
                 throw new Exception("Please download the MNIST images, as pngs, such that there is a path training\\0\\1.png (or training/0/1.png)");
 
             Console.WriteLine($"Using MNIST images from {dirPath}... please wait!");
-            var mnist_data = LoadMNistData(dirPath);
+            var mnist_data = LoadMNistData(System.IO.Path.Join(dirPath, "training"));
             int maxCountPixels = mnist_data.Max(p => p.Item2.Length); // should be 784
 
             // now, run through ML..
             // need 784 input parameters, 10 output parameters, so ... ?? ... 30 hidden (1st layer) parameters?
             LayerChain layers = new LayerChain();
             layers.Add(new Layer(maxCountPixels));
-            layers.Add(new Layer(100));
-            layers.Add(new Layer(30));
-            layers.Add(new Layer(10));
+            layers.Add(new Layer((int)(maxCountPixels / Math.Log(maxCountPixels)))); // roughly 80 or so
+            layers.Add(new Layer((int)Math.Sqrt(maxCountPixels))); // 28
+            layers.Add(new Layer(mnist_data.Select(p => p.Item1).Distinct().Count())); // 10 if mnist
 
             var epochsTimesRightWrongs = new List<EpochResult>();
             int epoch = 0;
@@ -70,7 +70,7 @@ namespace mnistfun
             List<Tuple<int, double[]>> mnist_data = new List<Tuple<int, double[]>>();
             for (int i = 0; i < 10; i++)
             {
-                var files = System.IO.Directory.GetFiles(dirPath);
+                var files = System.IO.Directory.GetFiles(System.IO.Path.Join(dirPath, i.ToString()));
                 foreach (string file in files)
                 {
                     var image = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Argb32>(file);

@@ -74,7 +74,7 @@ namespace mnistfun
 
                     // backpropagate from output layer to hidden layer 1 learning adjustments
                     var outputToHiddenLayer1Correction = CalculateBackpropagationMatrix(deltaOutput, hiddenLayer1Values, -0.01);
-                    hiddenLayer1ToOutputMatrix = ApplyBackPropagationMatrix(outputToHiddenLayer1Correction, hiddenLayer1ToOutputMatrix);
+                    hidden1ToOutput.ApplyBackPropagationMatrix(outputToHiddenLayer1Correction, hiddenLayer1ToOutputMatrix);
 
                     // harder math, can't cheat
                     double[] deltaHiddenLayer1a = new double[hiddenLayer1Count];

@@ -1,5 +1,6 @@
 ﻿using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Processing;
+using System.Net.WebSockets;
 using System.Reflection;
 using System.Reflection.Metadata;
 
@@ -7,6 +8,7 @@ namespace mnistfun
 {
     internal class Program
     {
+        static internal readonly Random rand = new Random();
         static void Main(string[] args)
         {
             string dirPath = System.Environment.CurrentDirectory;
@@ -39,19 +41,10 @@ namespace mnistfun
 
             // now, run through ML..
             // need 784 input parameters, 10 output parameters, so ... ?? ... 30 hidden (1st layer) parameters?
-            int inputParamCount = maxCountPixels;
-            int hiddenLayer1Count = 30;
-            int outputParamCount = 10;
-            double[,] inputToHiddenLayer1Matrix = new double[inputParamCount, hiddenLayer1Count];
-            double[,] hiddenLayer1ToOutputMatrix = new double[hiddenLayer1Count, outputParamCount];
-
-            var rand = new Random();
-            FillWithRandom(rand, inputToHiddenLayer1Matrix);
-            FillWithRandom(rand, hiddenLayer1ToOutputMatrix);
-            /*double[] biasInputToHidden = new double[hiddenLayer1Count];
-            double[] biasHiddenToOutput = new double[outputParamCount];
-            FillWithValue(0, biasInputToHidden);
-            FillWithValue(0, biasHiddenToOutput);*/
+            LayerChain layers = new LayerChain();
+            layers.Add(new Layer(maxCountPixels));
+            layers.Add(new Layer(30));
+            layers.Add(new Layer(10));
 
             var epochsTimesRightWrongs = new List<EpochResult>();
             int epoch = 0;
@@ -63,46 +56,19 @@ namespace mnistfun
 
                 foreach (var item in mnist_data.OrderBy(p => Guid.NewGuid()))
                 {
-                    var hiddenLayer1Values = ApplyMatricesForward(inputToHiddenLayer1Matrix, item.Item2);
-                    var outputLayerValues = ApplyMatricesForward(hiddenLayer1ToOutputMatrix, hiddenLayer1Values);
+                    layers.SetInputNeurons(item.Item2);
+                    layers.ApplyMatricesForward();
 
                     // ok, figure out error cost
-                    double[] deltaOutput = new double[outputParamCount];
-                    for (int i = 0; i < outputParamCount; i++)
-                        deltaOutput[i] = (outputLayerValues[i] - (i == item.Item1 ? 1 : 0));
-                    var errCost = 1 / outputLayerValues.Length * deltaOutput.Sum(p => Math.Pow(p, 2));
-
-                    // backpropagate from output layer to hidden layer 1 learning adjustments
-                    var outputToHiddenLayer1Correction = CalculateBackpropagationMatrix(deltaOutput, hiddenLayer1Values, -0.01);
-                    hidden1ToOutput.ApplyBackPropagationMatrix(outputToHiddenLayer1Correction, hiddenLayer1ToOutputMatrix);
-
-                    // harder math, can't cheat
-                    double[] deltaHiddenLayer1a = new double[hiddenLayer1Count];
-                    for (int i = 0; i < hiddenLayer1Count; i++)
-                        deltaHiddenLayer1a[i] = (hiddenLayer1Values[i] * (1 - hiddenLayer1Values[i]));
-                    double[] deltaHiddenLayer1b = MatrixMultiply(hiddenLayer1ToOutputMatrix, deltaOutput);
-                    double[] deltaHiddenLayer1c = new double[hiddenLayer1Count];
-                    for (int i = 0; i < deltaHiddenLayer1c.Length; i++)
-                        deltaHiddenLayer1c[i] = deltaHiddenLayer1b[i] * deltaHiddenLayer1a[i];
-
-                    // ok, now adjust input weights
-                    var hiddenLayer1ToInputCorrection = CalculateBackpropagationMatrix(deltaHiddenLayer1c, item.Item2, -0.01);
-                    inputToHiddenLayer1Matrix = ApplyBackPropagationMatrix(hiddenLayer1ToInputCorrection, inputToHiddenLayer1Matrix);
+                    var deltaOutput = layers.GenerateOutputDelta(item.Item1);
+                    layers.ApplyOutputDelta(deltaOutput);
+                    layers.BackpropagateDelta(deltaOutput);
 
                     // ok, did the output match?
-                    int selected = FoundHighestValue(outputLayerValues);
-                    if (selected == item.Item1)
-                    {
-                        //Console.WriteLine($"YAY I found {selected}");
-                        Console.Write($" {selected}{item.Item1}!");
+                    if (layers.Output.FoundHighestValue() == item.Item1)
                         res.CountRight(item.Item1);
-                    }
                     else
-                    {
-                        //Console.WriteLine($"FAILED: I thought it was {selected} but it was {item.Item1}");
-                        Console.Write($" {selected}{item.Item1} .");
                         res.CountWrong(item.Item1);
-                    }
                 }
                 epochsTimesRightWrongs.Add(res);
 
@@ -113,6 +79,165 @@ namespace mnistfun
                 epoch++;
                 if (epoch >= 3) Console.WriteLine("Reply 'N' to quit.");
             } while (epoch < 3 || !(Console.ReadLine() ?? "").Trim().ToLower().StartsWith("n"));
+        }
+
+        public class InterLayerMatrix
+        {
+            public InterLayerMatrix(Layer fromLayer, Layer toLayer)
+            {
+                FromLayer = fromLayer;
+                ToLayer = toLayer;
+                matrix = new double[fromLayer.neurons.Length, toLayer.neurons.Length];
+
+                FillWithRandom(Program.rand, matrix);
+            }
+            public double[,] matrix;
+            public readonly Layer FromLayer;
+            public readonly Layer ToLayer;
+
+            public void ApplyMatricesForward()
+            {
+                // weight matrix 1st dimension is left/input layer (rows), 2nd dimension is right/output layer (column)
+                // (note: opposite of youtube video I'm watching!)
+                int columns = matrix.GetLength(1);
+                ToLayer.Reset();
+                for (int resultIdx = 0; resultIdx < columns; resultIdx++)
+                {
+                    double h_pre = 0;
+                    for (int pix = 0; pix < matrix.GetLength(0); pix++)
+                        // multiply them by the input -> hidden layer 1, then apply sigmoid function to that                            
+                        h_pre += FromLayer.neurons[pix] * matrix[pix, resultIdx];
+                    ToLayer.neurons[resultIdx] = Program.Sigmoid(h_pre);
+                }
+            }
+
+            public double[] CalculateBackpropagationMatrixDelta(double[] deltaOutput)
+            {
+                double[] deltaHiddenLayer1a = new double[FromLayer.Length];
+                for (int i = 0; i < FromLayer.Length; i++)
+                    deltaHiddenLayer1a[i] = (FromLayer.neurons[i] * (1 - FromLayer.neurons[i]));
+                double[] deltaHiddenLayer1b = Program.MatrixMultiply(matrix, deltaOutput);
+                double[] deltaHiddenLayer1c = new double[FromLayer.Length];
+                for (int i = 0; i < deltaHiddenLayer1c.Length; i++)
+                    deltaHiddenLayer1c[i] = deltaHiddenLayer1b[i] * deltaHiddenLayer1a[i];
+                return deltaHiddenLayer1c;
+            }
+
+            public void ApplyBackPropagationMatrix(double[,] correctionMatrix)
+            {
+                // should be the same shape (dimensions) so easy!
+                for (int i = 0; i < correctionMatrix.GetLength(0); i++)
+                    for (int j = 0; j < correctionMatrix.GetLength(1); j++)
+                        matrix[i, j] += correctionMatrix[i, j];
+            }
+        }
+
+        public class LayerChain
+        {
+            public LinkedList<InterLayerMatrix> Matrices = new LinkedList<InterLayerMatrix>();
+            public LinkedList<Layer> Layers = new LinkedList<Layer>();
+            public LayerChain Add(Layer layer)
+            {
+                Layers.AddLast(layer);
+                if (Layers.Count >= 2)
+                {
+                    var matrix = new InterLayerMatrix(Layers.Last.Previous.Value, Layers.Last.Value);
+                    Matrices.AddLast(matrix);
+                }
+                return this;
+            }
+            public void SetInputNeurons(double[] input)
+            {
+                Layers.First.Value.SetNeurons(input);
+            }
+            public void ApplyMatricesForward()
+            {
+                foreach (var m in Matrices)
+                    m.ApplyMatricesForward();
+            }
+            public Layer Output => Layers.Last.Value;
+
+            public double[] GenerateOutputDelta(int realValue)
+            {
+                var output = Layers.Last.Value;
+                double[] deltaOutput = new double[output.Length];
+                for (int i = 0; i < output.neurons.Length; i++)
+                    deltaOutput[i] = (output.neurons[i] - (i == realValue ? 1 : 0));
+                return deltaOutput;
+            }
+
+            internal void ApplyOutputDelta(double[] deltaOutput)
+            {
+                var hidden1 = Layers.Last.Previous.Value;
+                var hidden1ToOutput = Matrices.Last.Value;
+                // backpropagate from output layer to hidden layer 1 learning adjustments
+                var outputToHiddenLayer1Correction = hidden1.CalculateBackpropagationMatrix(deltaOutput, -0.01);
+                hidden1ToOutput.ApplyBackPropagationMatrix(outputToHiddenLayer1Correction);
+            }
+
+            internal void BackpropagateDelta(double[] deltaOutput)
+            {
+                for (int i = Matrices.Count - 1; i > 0; i--)
+                {
+                    var backSourceMatrix = Matrices.ElementAt(i);
+                    var backDestMatrix = Matrices.ElementAt(i - 1);
+
+                    // harder math, can't cheat
+                    deltaOutput = backSourceMatrix.CalculateBackpropagationMatrixDelta(deltaOutput);
+                    // ok, now adjust input weights
+                    var corrections = backDestMatrix.FromLayer.CalculateBackpropagationMatrix(deltaOutput, -0.01);
+                    backDestMatrix.ApplyBackPropagationMatrix(corrections);
+                }
+            }
+        }
+
+        public class Layer
+        {
+            public Layer(int countNeurons)
+            {
+                neurons = new double[countNeurons];
+                FillWithRandom(Program.rand, neurons);
+            }
+            public Layer(double[] values)
+            {
+                SetNeurons(values);
+            }
+            public double[] neurons;
+            public void SetNeurons(double[] values)
+            {
+                neurons = values;
+            }
+
+            public int Length => neurons.Length;
+            public int Count => neurons.Length;
+
+            public void Reset()
+            {
+                neurons = new double[Length];
+            }
+
+            public double[,] CalculateBackpropagationMatrix(double[] errorCost, double learnRate)
+            {
+                if (learnRate > 0) learnRate = 0 - learnRate; // needs to be negative
+                double[,] ret = new double[Length, errorCost.Length];
+                for (int neuron = 0; neuron < Length; neuron++)
+                    for (int errorIdx = 0; errorIdx < errorCost.Length; errorIdx++)
+                        ret[neuron, errorIdx] = neurons[neuron] * errorCost[errorIdx] * learnRate; // learn rate should be like -0.01
+                return ret;
+            }
+            public int FoundHighestValue()
+            {
+                double highestValue = double.MinValue;
+                int bestIdx = -1;
+                for (int idx = 0; idx < neurons.Length; idx++)
+                    if (neurons[idx] > highestValue)
+                    {
+                        highestValue = neurons[idx];
+                        bestIdx = idx;
+                    }
+
+                return bestIdx;
+            }
         }
 
         public class EpochResult
@@ -132,12 +257,13 @@ namespace mnistfun
 
             public override string ToString()
             {
-                string ret = $"Epoch: {EpochGeneration}:";
+                string ret = $"Epoch {EpochGeneration}:";
                 for (int i = 0; i < 10; i++)
                     ret += $" {i}: {Numbers[i].PercentStr}";
                 return ret;
             }
         }
+
         public class CorrectNumberGuessed
         {
             public int CountedRight = 0;
@@ -146,21 +272,6 @@ namespace mnistfun
             public string PercentStr => Total > 0 ? ((decimal)CountedRight / Total).ToString("P2") : "N/A";
             public void CountRight() => CountedRight += 1;
             public void CountWrong() => CountedWrong += 1;
-        }
-
-        static int FoundHighestValue(double[] values)
-        {
-            double highestValue = double.MinValue;
-            int bestIdx = -1;
-            for (int idx = 0; idx < values.Length; idx++)
-            {
-                if (values[idx] > highestValue)
-                {
-                    highestValue = values[idx];
-                    bestIdx = idx;
-                }
-            }
-            return bestIdx;
         }
 
         static double[] MatrixMultiply(double[,] data, double[] columnMultipliers)
@@ -174,42 +285,6 @@ namespace mnistfun
                 for (int j = 0; j < data.GetLength(1); j++)
                     ret[j] += data[i, j] * columnMultipliers[j];
             return ret;
-        }
-
-        static double[,] ApplyBackPropagationMatrix(double[,] correctionMatrix, double[,] weightMatrix)
-        {
-            // should be the same shape (dimensions) so easy!
-            for (int i = 0; i < correctionMatrix.GetLength(0); i++)
-                for (int j = 0; j < correctionMatrix.GetLength(1); j++)
-                    weightMatrix[i, j] += correctionMatrix[i, j];
-            return weightMatrix;
-        }
-
-        static double[,] CalculateBackpropagationMatrix(double[] errorCost, double[] neuronValues, double learnRate)
-        {
-            if (learnRate > 0) learnRate = 0 - learnRate; // needs to be negative
-            double[,] ret = new double[neuronValues.Length, errorCost.Length];
-            for (int neuron = 0; neuron < neuronValues.Length; neuron++)
-                for (int errorIdx = 0; errorIdx < errorCost.Length; errorIdx++)
-                    ret[neuron, errorIdx] = neuronValues[neuron] * errorCost[errorIdx] * learnRate; // learn rate should be like -0.01
-            return ret;
-        }
-
-        static double[] ApplyMatricesForward(double[,] weightMatrix, double[] values)
-        {
-            // weight matrix 1st dimension is left/input layer (rows), 2nd dimension is right/output layer (column)
-            // (note: opposite of youtube video I'm watching!)
-            int columns = weightMatrix.GetLength(1);
-            double[] resultValues = new double[columns];
-            for (int resultIdx = 0; resultIdx < columns; resultIdx++)
-            {
-                double h_pre = 0;
-                for (int pix = 0; pix < weightMatrix.GetLength(0); pix++)
-                    // multiply them by the input -> hidden layer 1, then apply sigmoid function to that                            
-                    h_pre += values[pix] * weightMatrix[pix, resultIdx];
-                resultValues[resultIdx] = Sigmoid(h_pre);
-            }
-            return resultValues;
         }
 
         static double Sigmoid(double h_pre) => (double)(1 / (1 + Math.Pow(Math.E, (double)(-h_pre))));

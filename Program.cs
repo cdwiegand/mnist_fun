@@ -1,8 +1,11 @@
-﻿using SixLabors.ImageSharp.Formats.Png;
+﻿using CsvHelper;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using System.Net.WebSockets;
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Runtime.CompilerServices;
 
 namespace mnistfun
 {
@@ -11,34 +14,95 @@ namespace mnistfun
         static internal readonly Random rand = new Random();
         static void Main(string[] args)
         {
-            string dirPath = System.Environment.CurrentDirectory;
-            while (dirPath != null && !System.IO.File.Exists(System.IO.Path.Combine(dirPath, "training", "0", "1.png")) && System.IO.Path.GetPathRoot(dirPath) != dirPath)
-                dirPath = System.IO.Directory.GetParent(dirPath)?.FullName;
+            List<Tuple<char, double[]>> sourceData;
 
-            if (dirPath == null)
-                throw new Exception("Please download the MNIST images, as pngs, such that there is a path training\\0\\1.png (or training/0/1.png)");
+            if (args.Length == 0)
+            {
+                // assume mnist
+                string dirPath = FindPath(p => System.IO.File.Exists(System.IO.Path.Combine(p, "training", "0", "1.png")));
 
-            Console.WriteLine($"Using MNIST images from {dirPath}... please wait!");
-            var mnist_data = LoadMNistData(System.IO.Path.Join(dirPath, "training"));
-            int maxCountPixels = mnist_data.Max(p => p.Item2.Length); // should be 784
+                if (dirPath == null)
+                    throw new Exception("Please download the MNIST images, as pngs, such that there is a path training\\0\\1.png (or training/0/1.png)");
+
+                Console.WriteLine($"Using MNIST images from {dirPath}... please wait!");
+                sourceData = LoadMNistData(System.IO.Path.Join(dirPath, "training"));
+            }
+            else if (args.Length == 1)
+            {
+                string dirPath = System.IO.File.Exists(args[0]) ? args[0] : FindPath(p => System.IO.File.Exists(System.IO.Path.Combine(p, args[0])));
+                if (dirPath == null)
+                    throw new Exception("File not found.");
+                string loadPath = System.IO.File.Exists(args[0]) ? args[0] : System.IO.Path.Combine(dirPath, args[0]);
+
+                // path to mnist csv or emnist csv
+                var tempData = new List<Tuple<int, double[]>>();
+                using (var reader = new System.IO.StreamReader(loadPath))
+                using (var csver = new CsvHelper.CsvReader(reader, System.Globalization.CultureInfo.InvariantCulture, false))
+                    while (csver.Read()) // no header!
+                    {
+                        int fieldMap = csver.GetField<int>(0);
+                        int[] pixelsInt = new int[csver.ColumnCount - 1];
+                        for (int i = 1; i < csver.ColumnCount; i++)
+                            pixelsInt[i] = csver.GetField<int>(i);
+                        double[] pixels = pixelsInt.Select(p => (double)p / 256).ToArray();
+                        tempData.Add(new Tuple<int, double[]>(fieldMap, pixels));
+                    }
+
+                // now if mnist, we're good, but if emnist we need to map the ints to their letters
+                if (tempData.Select(p => p.Item1).Max() >= 10)
+                {
+                    sourceData = new List<Tuple<char, double[]>>();
+                    // letters, remap using ascii
+                    foreach (var tup in tempData)
+                        if (tup.Item1 <= 9)
+                            sourceData.Add(new Tuple<char, double[]>(tup.Item1.ToString()[0], tup.Item2));
+                        else
+                        {
+                            int asciiLetter = 0;
+                            if (tup.Item1 <= 35) // is upper case letter
+                                asciiLetter = 55 + tup.Item1;
+                            else switch (tup.Item1)
+                                {
+                                    case 36: asciiLetter = 97; break;
+                                    case 37: asciiLetter = 98; break;
+                                    case 38: asciiLetter = 100; break;
+                                    case 39: asciiLetter = 101; break;
+                                    case 40: asciiLetter = 102; break;
+                                    case 41: asciiLetter = 103; break;
+                                    case 42: asciiLetter = 104; break;
+                                    case 43: asciiLetter = 110; break;
+                                    case 44: asciiLetter = 113; break;
+                                    case 45: asciiLetter = 114; break;
+                                    case 46: asciiLetter = 116; break;
+                                    default: throw new NotImplementedException();
+                                }
+                            sourceData.Add(new Tuple<char, double[]>(Convert.ToChar(asciiLetter), tup.Item2));
+                        }
+                }
+                else
+                    sourceData = tempData.Select(p => new Tuple<char, double[]>(p.Item1.ToString()[0], p.Item2)).ToList();
+            }
+            else
+                throw new Exception("Don't know what to do!");
+
+            int maxCountPixels = sourceData.Max(p => p.Item2.Length); // should be 784
 
             // now, run through ML..
-            // need 784 input parameters, 10 output parameters, so ... ?? ... 30 hidden (1st layer) parameters?
             LayerChain layers = new LayerChain();
             layers.Add(new Layer(maxCountPixels));
-            layers.Add(new Layer((int)(maxCountPixels / Math.Log(maxCountPixels)))); // roughly 80 or so
-            layers.Add(new Layer((int)Math.Sqrt(maxCountPixels))); // 28
-            layers.Add(new Layer(mnist_data.Select(p => p.Item1).Distinct().Count())); // 10 if mnist
+            layers.Add(new Layer((int)(maxCountPixels / Math.Log(maxCountPixels)))); // roughly 80 or so if MNIST
+            layers.Add(new Layer((int)Math.Sqrt(maxCountPixels))); // 28 if MNIST
+            layers.Add(new Layer(sourceData.Select(p => p.Item1).Distinct().Count())); // 10 if mnist if MNIST
 
             var epochsTimesRightWrongs = new List<EpochResult>();
             int epoch = 0;
 
-            Console.WriteLine($"Loaded {mnist_data.Count} images, now analysing...");
+            Console.WriteLine($"Loaded {sourceData.Count} images, now analysing...");
             do
             {
                 var res = new EpochResult() { EpochGeneration = epoch };
 
-                foreach (var item in mnist_data.OrderBy(p => Guid.NewGuid()))
+                foreach (var item in sourceData.OrderBy(p => Guid.NewGuid()))
                 {
                     layers.SetInputNeurons(item.Item2);
                     layers.ApplyMatricesForward();
@@ -65,12 +129,21 @@ namespace mnistfun
             } while (epoch < 3 || !(Console.ReadLine() ?? "").Trim().ToLower().StartsWith("n"));
         }
 
-        private static List<Tuple<int, double[]>> LoadMNistData(string dirPath)
+        private static string FindPath(Func<string, bool> Test)
         {
-            List<Tuple<int, double[]>> mnist_data = new List<Tuple<int, double[]>>();
-            for (int i = 0; i < 10; i++)
+            string dirPath = System.Environment.CurrentDirectory;
+            while (dirPath != null && !Test(dirPath) && System.IO.Path.GetPathRoot(dirPath) != dirPath)
+                dirPath = System.IO.Directory.GetParent(dirPath)?.FullName;
+            return dirPath;
+        }
+
+        private static List<Tuple<char, double[]>> LoadMNistData(string dirPath)
+        {
+            var mnist_data = new List<Tuple<char, double[]>>();
+            foreach (var subdir in System.IO.Directory.GetDirectories(dirPath))
             {
-                var files = System.IO.Directory.GetFiles(System.IO.Path.Join(dirPath, i.ToString()));
+                var files = System.IO.Directory.GetFiles(subdir);
+                char c = System.IO.Path.GetDirectoryName(subdir)[0];
                 foreach (string file in files)
                 {
                     var image = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Argb32>(file);
@@ -82,7 +155,7 @@ namespace mnistfun
                             double pixel = ((double)image[x, y].R) / 256;
                             pixels[idx++] = pixel; // assign and more to next pixel
                         }
-                    mnist_data.Add(new Tuple<int, double[]>(i, pixels));
+                    mnist_data.Add(new Tuple<char, double[]>(c, pixels));
                 }
             }
             return mnist_data;

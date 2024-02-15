@@ -16,33 +16,17 @@ namespace mnistfun
                 dirPath = System.IO.Directory.GetParent(dirPath)?.FullName;
 
             if (dirPath == null)
-                throw new Exception("Please download the MNIST images, as pngs, such that there is a path training\\0\\1.png");
+                throw new Exception("Please download the MNIST images, as pngs, such that there is a path training\\0\\1.png (or training/0/1.png)");
 
             Console.WriteLine($"Using MNIST images from {dirPath}... please wait!");
-            List<Tuple<int, double[]>> mnist_data = new List<Tuple<int, double[]>>();
-            for (int i = 0; i < 10; i++)
-            {
-                var files = System.IO.Directory.GetFiles($"c:\\users\\chris\\downloads\\pyy\\out\\training\\{i}");
-                foreach (string file in files)
-                {
-                    var image = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Argb32>(file);
-                    double[] pixels = new double[image.Width * image.Height];
-                    int idx = 0;
-                    for (int y = 0; y < image.Height; y++)
-                        for (int x = 0; x < image.Width; x++)
-                        {
-                            double pixel = ((double)image[x, y].R) / 256;
-                            pixels[idx++] = pixel; // assign and more to next pixel
-                        }
-                    mnist_data.Add(new Tuple<int, double[]>(i, pixels));
-                }
-            }
+            var mnist_data = LoadMNistData(dirPath);
             int maxCountPixels = mnist_data.Max(p => p.Item2.Length); // should be 784
 
             // now, run through ML..
             // need 784 input parameters, 10 output parameters, so ... ?? ... 30 hidden (1st layer) parameters?
             LayerChain layers = new LayerChain();
             layers.Add(new Layer(maxCountPixels));
+            layers.Add(new Layer(100));
             layers.Add(new Layer(30));
             layers.Add(new Layer(10));
 
@@ -81,6 +65,29 @@ namespace mnistfun
             } while (epoch < 3 || !(Console.ReadLine() ?? "").Trim().ToLower().StartsWith("n"));
         }
 
+        private static List<Tuple<int, double[]>> LoadMNistData(string dirPath)
+        {
+            List<Tuple<int, double[]>> mnist_data = new List<Tuple<int, double[]>>();
+            for (int i = 0; i < 10; i++)
+            {
+                var files = System.IO.Directory.GetFiles(dirPath);
+                foreach (string file in files)
+                {
+                    var image = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Argb32>(file);
+                    double[] pixels = new double[image.Width * image.Height];
+                    int idx = 0;
+                    for (int y = 0; y < image.Height; y++)
+                        for (int x = 0; x < image.Width; x++)
+                        {
+                            double pixel = ((double)image[x, y].R) / 256;
+                            pixels[idx++] = pixel; // assign and more to next pixel
+                        }
+                    mnist_data.Add(new Tuple<int, double[]>(i, pixels));
+                }
+            }
+            return mnist_data;
+        }
+
         public class InterLayerMatrix
         {
             public InterLayerMatrix(Layer fromLayer, Layer toLayer)
@@ -89,7 +96,7 @@ namespace mnistfun
                 ToLayer = toLayer;
                 matrix = new double[fromLayer.neurons.Length, toLayer.neurons.Length];
 
-                FillWithRandom(Program.rand, matrix);
+                MathUtil.FillWithRandom(Program.rand, matrix);
             }
             public double[,] matrix;
             public readonly Layer FromLayer;
@@ -107,7 +114,7 @@ namespace mnistfun
                     for (int pix = 0; pix < matrix.GetLength(0); pix++)
                         // multiply them by the input -> hidden layer 1, then apply sigmoid function to that                            
                         h_pre += FromLayer.neurons[pix] * matrix[pix, resultIdx];
-                    ToLayer.neurons[resultIdx] = Program.Sigmoid(h_pre);
+                    ToLayer.neurons[resultIdx] = MathUtil.Sigmoid(h_pre);
                 }
             }
 
@@ -116,7 +123,7 @@ namespace mnistfun
                 double[] deltaHiddenLayer1a = new double[FromLayer.Length];
                 for (int i = 0; i < FromLayer.Length; i++)
                     deltaHiddenLayer1a[i] = (FromLayer.neurons[i] * (1 - FromLayer.neurons[i]));
-                double[] deltaHiddenLayer1b = Program.MatrixMultiply(matrix, deltaOutput);
+                double[] deltaHiddenLayer1b = MathUtil.MatrixMultiply(matrix, deltaOutput);
                 double[] deltaHiddenLayer1c = new double[FromLayer.Length];
                 for (int i = 0; i < deltaHiddenLayer1c.Length; i++)
                     deltaHiddenLayer1c[i] = deltaHiddenLayer1b[i] * deltaHiddenLayer1a[i];
@@ -196,11 +203,7 @@ namespace mnistfun
             public Layer(int countNeurons)
             {
                 neurons = new double[countNeurons];
-                FillWithRandom(Program.rand, neurons);
-            }
-            public Layer(double[] values)
-            {
-                SetNeurons(values);
+                MathUtil.FillWithRandom(Program.rand, neurons);
             }
             public double[] neurons;
             public void SetNeurons(double[] values)
@@ -245,11 +248,11 @@ namespace mnistfun
             public EpochResult()
             {
                 for (int i = 0; i < Numbers.Length; i++)
-                    Numbers[i] = new CorrectNumberGuessed();
+                    Numbers[i] = new GuessResult();
             }
 
             public int EpochGeneration;
-            public CorrectNumberGuessed[] Numbers = new CorrectNumberGuessed[10];
+            public GuessResult[] Numbers = new GuessResult[10];
             public int CountedCorrect => Numbers.Sum(p => p.CountedRight);
             public int CountedWrong => Numbers.Sum(p => p.CountedWrong);
             public void CountRight(int number) => Numbers[number].CountRight();
@@ -264,7 +267,7 @@ namespace mnistfun
             }
         }
 
-        public class CorrectNumberGuessed
+        public class GuessResult
         {
             public int CountedRight = 0;
             public int CountedWrong = 0;
@@ -272,49 +275,6 @@ namespace mnistfun
             public string PercentStr => Total > 0 ? ((decimal)CountedRight / Total).ToString("P2") : "N/A";
             public void CountRight() => CountedRight += 1;
             public void CountWrong() => CountedWrong += 1;
-        }
-
-        static double[] MatrixMultiply(double[,] data, double[] columnMultipliers)
-        {
-            if (columnMultipliers.Length != data.GetLength(1)) throw new Exception("Bad matrix!");
-
-            double[] ret = new double[data.GetLength(0)];
-            FillWithValue(0, ret); // initialize to zero
-
-            for (int i = 0; i < data.GetLength(0); i++)
-                for (int j = 0; j < data.GetLength(1); j++)
-                    ret[j] += data[i, j] * columnMultipliers[j];
-            return ret;
-        }
-
-        static double Sigmoid(double h_pre) => (double)(1 / (1 + Math.Pow(Math.E, (double)(-h_pre))));
-
-        static void FillWithRandom(Random rand, double[] matrix)
-        {
-            for (int i2hl1 = 0; i2hl1 < matrix.GetLength(0); i2hl1++)
-                matrix[i2hl1] = rand.NextDouble() - 0.5;
-        }
-        static void FillWithValue(double value, double[] matrix)
-        {
-            for (int i2hl1 = 0; i2hl1 < matrix.GetLength(0); i2hl1++)
-                matrix[i2hl1] = value;
-        }
-        static void FillWithRandom(Random rand, double[,] matrix)
-        {
-            for (int i = 0; i < matrix.GetLength(0); i++)
-                for (int j = 0; j < matrix.GetLength(1); j++)
-                    matrix[i, j] = rand.NextDouble() - 0.5;
-        }
-        static void FillWithValue(double value, double[,] matrix)
-        {
-            for (int i = 0; i < matrix.GetLength(0); i++)
-                for (int j = 0; j < matrix.GetLength(1); j++)
-                    matrix[i, j] = value;
-        }
-        static void FillWithValue(int value, int[] matrix)
-        {
-            for (int i2hl1 = 0; i2hl1 < matrix.GetLength(0); i2hl1++)
-                matrix[i2hl1] = value;
         }
     }
 }

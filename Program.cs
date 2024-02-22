@@ -86,7 +86,9 @@ namespace mnistfun
 
                 Console.WriteLine();
                 foreach (var epochVal in epochsTimesRightWrongs)
+                {
                     Console.WriteLine(epochVal);
+                }
 
                 epoch++;
                 if (epoch >= 3) Console.WriteLine("Reply 'N' to quit.");
@@ -311,6 +313,7 @@ namespace mnistfun
             public Dictionary<char, GuessResult> Characters = new Dictionary<char, GuessResult>();
             public int CountedCorrect => Characters.Select(p => p.Value.CountedRight).Sum();
             public int CountedWrong => Characters.Select(p => p.Value.CountedWrong).Sum();
+            public int CountedTotal => Characters.Select(p => p.Value.CountedRight + p.Value.CountedWrong).Sum();
             public void CountRight(char number)
             {
                 if (!Characters.ContainsKey(number))
@@ -326,11 +329,13 @@ namespace mnistfun
 
             public override string ToString()
             {
-                string ret = $"Epoch {EpochGeneration}:";
-                foreach (char i in Characters.Keys)
-                    ret += $" {i}: {Characters[i].PercentStr}";
+                string ret = $"Epoch {EpochGeneration}: {Accuracy:P3}\n";
+                int idx = 0;
+                foreach (char i in Characters.Keys.OrderBy(p => p))
+                    ret += (idx++ % 12 == 0 ? "\n" : "") + $" {i}: {Characters[i].PercentStr}";
                 return ret;
             }
+            public decimal Accuracy => (decimal)CountedCorrect / (decimal)CountedTotal;
         }
 
         public class GuessResult

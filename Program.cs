@@ -48,10 +48,10 @@ namespace mnistfun
                         LayerChain chains = trainer.BuildTrainingLayers(source);
 
                         Console.WriteLine($"Loaded {source.Count} model data, now analysing...");
-                        trainer.RunTraining(chains, source);
+                        var results = trainer.RunTraining(chains, source);
 
                         if (!string.IsNullOrEmpty(config.ModelFile))
-                            chains.SaveModel(config);
+                            chains.SaveModel(config, results);
                     }
                     break;
                 default: throw new NotImplementedException("Unknown mode value: " + config.Mode);

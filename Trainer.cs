@@ -35,14 +35,14 @@ namespace mnistfun
             return layers;
         }
 
-        public void RunTraining(LayerChain layers, SourceData sourceData)
+        public List<EpochResult> RunTraining(LayerChain layers, SourceData sourceData)
         {
             var epochsTimesRightWrongs = new List<EpochResult>();
             int epoch = 0;
 
             do
             {
-                var res = new EpochResult() { EpochGeneration = epoch };
+                var res = new EpochResult() { EpochGeneration = epoch, StartTime=DateTime.UtcNow };
 
                 foreach (var item in sourceData.OrderBy(p => Guid.NewGuid()))
                 {
@@ -63,10 +63,14 @@ namespace mnistfun
                     else
                         res.CountWrong(item.Character);
                 }
+
+                res.EndTime = DateTime.UtcNow;
                 epochsTimesRightWrongs.Add(res);
                 Console.WriteLine(res);
                 epoch++;
             } while (epoch < config.Loops);
+
+            return epochsTimesRightWrongs;
         }
     }
 }

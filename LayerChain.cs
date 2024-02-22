@@ -27,9 +27,11 @@ namespace mnistfun
             return this;
         }
 
-        public JsonNode ToJson()
+        public JsonNode ToJson(IList<EpochResult>? results = null)
         {
             JsonObject root = new JsonObject();
+            if (results != null) 
+                root.Add("Phases", new JsonArray(results.Select(p => p.ToJson()).ToArray()));
             root.Add("Layers", new JsonArray(Layers.Select(p => p.ToJson()).ToArray()));
             root.Add("Matrices", new JsonArray(Matrices.Select(p => p.ToJson()).ToArray()));
             return root;
@@ -52,8 +54,8 @@ namespace mnistfun
             return ret;
         }
 
-        public void SaveModel(RuntimeConfig config)
-            => System.IO.File.WriteAllText(config.ModelFile, ToJson().ToString());
+        public void SaveModel(RuntimeConfig config, IList<EpochResult>? results=null)
+            => System.IO.File.WriteAllText(config.ModelFile, ToJson(results).ToString());
 
         public void SetInputNeurons(double[] input)
         {

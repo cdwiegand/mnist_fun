@@ -30,10 +30,10 @@ namespace mnistfun
 
         public override string ToString()
         {
-            string ret = $"Epoch {EpochGeneration}: {Accuracy:P3}\n";
+            string ret = $"\nEpoch {EpochGeneration}: {Accuracy:P3}";
             int idx = 0;
             foreach (char i in Characters.Keys.OrderBy(p => p))
-                ret += (idx++ % 12 == 0 ? "\n" : "") + $" {i}: {Characters[i].PercentStr}";
+                ret += (++idx % 12 == 0 ? "\n" : "") + $" {i}: {Characters[i].PercentStr}";
             return ret;
         }
 

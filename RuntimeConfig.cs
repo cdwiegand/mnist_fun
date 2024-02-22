@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace mnistfun
@@ -68,9 +69,10 @@ namespace mnistfun
             {
                 // try the other form: --name valueHere
                 for (int i = 0; i < args.Length - 1; i++)
-                    if (args[i] == "--" + name) arg = args[i + 1];
+                    if (args[i] == "--" + name) return args[i + 1];
             }
             if (string.IsNullOrEmpty(arg)) return null; // not present
+
             int idxColon = arg.IndexOf(':');
             int idxEqual = arg.IndexOf('=');
             if (idxColon > -1 && idxEqual > -1)
@@ -89,6 +91,8 @@ namespace mnistfun
         public readonly RuntimeMode Mode;
         public readonly int Loops;
         public readonly int[] RequestedHiddenLayers;
+
+        public override string ToString() => System.Text.Json.JsonSerializer.Serialize(this, new JsonSerializerOptions { IncludeFields = true });
 
         public enum RuntimeMode
         {

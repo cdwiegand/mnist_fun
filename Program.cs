@@ -17,6 +17,7 @@ namespace mnistfun
         static void Main(string[] args)
         {
             RuntimeConfig config = new RuntimeConfig(args);
+            Console.WriteLine("Using config: " + config);
 
             DateTime utcStart = DateTime.UtcNow;
             switch (config.Mode)

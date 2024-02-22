@@ -35,7 +35,7 @@ namespace mnistfun
             {
                 JsonArray row = new JsonArray();
                 for (int y = 0; y < Matrix.GetLength(1); y++)
-                    row.Add(jsonMatrix[x][y]);
+                    row.Add(Matrix[x, y]);
                 jsonMatrix.Add(row);
             }
             root.Add("Matrix", jsonMatrix);
@@ -46,7 +46,18 @@ namespace mnistfun
             Guid FromLayerId = json["FromLayerId"].Deserialize<Guid>();
             Guid ToLayerId = json["ToLayerId"].Deserialize<Guid>();
             var ret = new InterLayerMatrix(chain.Layers.First(p => p.Id == FromLayerId), chain.Layers.First(p => p.Id == ToLayerId));
-            ret.Matrix = json["Matrix"].Deserialize<double[,]>();
+
+            JsonArray jsonMatrix = json["Matrix"].AsArray();
+            int xCount = jsonMatrix.Count;
+            JsonArray firstRow = jsonMatrix[0].AsArray();
+            int yCount = firstRow.Count; // yes, I know, it's not really first "row", it's more first column, just so long as it's consistent with ToJson() it doesn't matter
+            ret.Matrix = new double[xCount, yCount];
+            for (int x = 0; x < xCount; x++)
+            {
+                JsonArray row = jsonMatrix[x].AsArray();
+                for (int y = 0; y < row.Count; y++)
+                    ret.Matrix[x, y] = row[y].AsValue().GetValue<double>();
+            }
             return ret;
         }
 

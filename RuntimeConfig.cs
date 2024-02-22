@@ -92,7 +92,7 @@ namespace mnistfun
         public readonly int Loops;
         public readonly int[] RequestedHiddenLayers;
 
-        public override string ToString() => System.Text.Json.JsonSerializer.Serialize(this, new JsonSerializerOptions { IncludeFields = true });
+        public override string ToString() => System.Text.Json.JsonSerializer.Serialize(this, new JsonSerializerOptions { IncludeFields = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull | System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault });
 
         public enum RuntimeMode
         {

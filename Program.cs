@@ -6,15 +6,22 @@ using System.Net.WebSockets;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace mnistfun
 {
     internal class Program
     {
         static internal readonly Random rand = new Random();
+        private static Dictionary<int, char> VECTOR_MAPPING = new Dictionary<int, char>();
+
         static void Main(string[] args)
         {
             List<Tuple<char, double[]>> sourceData;
+
+            string FILL_LETTERS = "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabdefghnqrt";
+            for (int i = 0; i < FILL_LETTERS.Length; i++)
+                VECTOR_MAPPING[i] = FILL_LETTERS[i];
 
             if (args.Length == 0)
             {
@@ -44,7 +51,7 @@ namespace mnistfun
             // now, run through ML..
             LayerChain layers = new LayerChain();
             layers.Add(new Layer(maxCountPixels));
-            layers.Add(new Layer((int)(maxCountPixels / Math.Log(maxCountPixels)))); // roughly 80 or so if MNIST
+            //layers.Add(new Layer((int)(maxCountPixels / Math.Log(maxCountPixels)))); // roughly 80 or so if MNIST
             layers.Add(new Layer((int)Math.Sqrt(maxCountPixels))); // 28 if MNIST
             layers.Add(new Layer(sourceData.Select(p => p.Item1).Distinct().Count())); // 10 if mnist if MNIST
 
@@ -58,16 +65,19 @@ namespace mnistfun
 
                 foreach (var item in sourceData.OrderBy(p => Guid.NewGuid()))
                 {
+                    int properMatchingOutputNeuron = VectorizeKey(item.Item1);
                     layers.SetInputNeurons(item.Item2);
                     layers.ApplyMatricesForward();
 
                     // ok, figure out error cost
-                    var deltaOutput = layers.GenerateOutputDelta(item.Item1);
+                    var deltaOutput = layers.GenerateOutputDelta(properMatchingOutputNeuron);
                     layers.ApplyOutputDelta(deltaOutput);
                     layers.BackpropagateDelta(deltaOutput);
 
                     // ok, did the output match?
-                    if (layers.Output.FoundHighestValue() == item.Item1)
+                    int matchedOutputNeuron = layers.Output.FindHighestValueOutputNeuron();
+                    char matchedOutputChar = DevectorizeKey(matchedOutputNeuron);
+                    if (matchedOutputChar == item.Item1)
                         res.CountRight(item.Item1);
                     else
                         res.CountWrong(item.Item1);
@@ -99,42 +109,14 @@ namespace mnistfun
                     tempData.Add(new Tuple<int, double[]>(fieldMap, pixels));
                 }
 
-            List<Tuple<char, double[]>> sourceData = new List<Tuple<char, double[]>>();
-            // now if mnist, we're good, but if emnist we need to map the ints to their letters
-            if (tempData.Select(p => p.Item1).Max() >= 10)
-            {
-                sourceData = new List<Tuple<char, double[]>>();
-                // letters, remap using ascii
-                foreach (var tup in tempData)
-                    if (tup.Item1 <= 9)
-                        sourceData.Add(new Tuple<char, double[]>(tup.Item1.ToString()[0], tup.Item2));
-                    else
-                    {
-                        int asciiLetter = 0;
-                        if (tup.Item1 <= 35) // is upper case letter
-                            asciiLetter = 55 + tup.Item1;
-                        else switch (tup.Item1)
-                            {
-                                case 36: asciiLetter = 97; break;
-                                case 37: asciiLetter = 98; break;
-                                case 38: asciiLetter = 100; break;
-                                case 39: asciiLetter = 101; break;
-                                case 40: asciiLetter = 102; break;
-                                case 41: asciiLetter = 103; break;
-                                case 42: asciiLetter = 104; break;
-                                case 43: asciiLetter = 110; break;
-                                case 44: asciiLetter = 113; break;
-                                case 45: asciiLetter = 114; break;
-                                case 46: asciiLetter = 116; break;
-                                default: throw new NotImplementedException();
-                            }
-                        sourceData.Add(new Tuple<char, double[]>(Convert.ToChar(asciiLetter), tup.Item2));
-                    }
-            }
-            else
-                sourceData = tempData.Select(p => new Tuple<char, double[]>(p.Item1.ToString()[0], p.Item2)).ToList();
-            return sourceData;
+            return tempData.Select(p => new Tuple<char, double[]>(DevectorizeKey(p.Item1), p.Item2)).ToList();
         }
+
+        // given an index (vector), what is the character?
+        private static char DevectorizeKey(int idx) => VECTOR_MAPPING.FirstOrDefault(p => p.Key == idx).Value;
+
+        // basicly, turn a character into its index (or vector) for comparison
+        private static int VectorizeKey(char key) => VECTOR_MAPPING.FirstOrDefault(p => p.Value == key).Key;
 
         private static string FindPath(Func<string, bool> Test)
         {
@@ -244,12 +226,12 @@ namespace mnistfun
             }
             public Layer Output => Layers.Last.Value;
 
-            public double[] GenerateOutputDelta(int realValue)
+            public double[] GenerateOutputDelta(int properMatchingOutputNeuron)
             {
                 var output = Layers.Last.Value;
                 double[] deltaOutput = new double[output.Length];
                 for (int i = 0; i < output.neurons.Length; i++)
-                    deltaOutput[i] = (output.neurons[i] - (i == realValue ? 1 : 0));
+                    deltaOutput[i] = (output.neurons[i] - (i == properMatchingOutputNeuron ? 1 : 0));
                 return deltaOutput;
             }
 
@@ -308,7 +290,7 @@ namespace mnistfun
                         ret[neuron, errorIdx] = neurons[neuron] * errorCost[errorIdx] * learnRate; // learn rate should be like -0.01
                 return ret;
             }
-            public int FoundHighestValue()
+            public int FindHighestValueOutputNeuron()
             {
                 double highestValue = double.MinValue;
                 int bestIdx = -1;

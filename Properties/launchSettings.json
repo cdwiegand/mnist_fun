@@ -2,7 +2,7 @@
   "profiles": {
     "mnistfun": {
       "commandName": "Project",
-      "commandLineArgs": "--train=c:\\devel\\emnist-balanced-train.csv --model=c:\\devel\\emnist-model-defaults.json"
+      "commandLineArgs": "--train=c:\\devel\\emnist-balanced-train.csv --model=c:\\devel\\emnist-model-defaults.json --loops=1"
     }
   }
 }

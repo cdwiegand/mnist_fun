@@ -18,6 +18,7 @@ namespace mnistfun
         {
             RuntimeConfig config = new RuntimeConfig(args);
 
+            DateTime utcStart = DateTime.UtcNow;
             switch (config.Mode)
             {
                 case RuntimeConfig.RuntimeMode.Running:
@@ -45,6 +46,8 @@ namespace mnistfun
                     break;
                 default: throw new NotImplementedException("Unknown mode value: " + config.Mode);
             }
+            TimeSpan ts = DateTime.UtcNow.Subtract(utcStart);
+            Console.WriteLine($"Took {ts} time to run.");
         }
     }
 }

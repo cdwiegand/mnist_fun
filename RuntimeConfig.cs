@@ -64,7 +64,12 @@ namespace mnistfun
         private static string? GetIfArg(string[] args, string name)
         {
             string arg = args.FirstOrDefault(p => p.StartsWith($"--{name}:") || p.StartsWith($"--{name}="));
-
+            if (string.IsNullOrEmpty(arg) && args.Any(p => p == "--" + name))
+            {
+                // try the other form: --name valueHere
+                for (int i = 0; i < args.Length - 1; i++)
+                    if (args[i] == "--" + name) arg = args[i + 1];
+            }
             if (string.IsNullOrEmpty(arg)) return null; // not present
             int idxColon = arg.IndexOf(':');
             int idxEqual = arg.IndexOf('=');

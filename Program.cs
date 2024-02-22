@@ -7,12 +7,21 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace mnistfun
 {
     internal class Program
     {
         static internal readonly Random rand = new Random();
+        internal static readonly JsonSerializerOptions DefaultJsonSerializeOptions = new JsonSerializerOptions
+        {
+            Converters = {
+                new JsonStringEnumConverter()
+            },
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull | System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault
+        };
 
         static void Main(string[] args)
         {

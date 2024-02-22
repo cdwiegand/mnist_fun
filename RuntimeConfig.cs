@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace mnistfun
@@ -85,14 +86,14 @@ namespace mnistfun
                 return null;
         }
 
-        public readonly string? TrainingPath;
-        public readonly string? RunFile;
-        public readonly string? ModelFile;
-        public readonly RuntimeMode Mode;
-        public readonly int Loops;
-        public readonly int[] RequestedHiddenLayers;
+        public  string? TrainingPath { get; private set; }
+        public  string? RunFile { get; private set; }
+        public  string? ModelFile { get; private set; }
+        public  RuntimeMode Mode { get; private set; }
+        public  int Loops { get; private set; }
+        public  int[] RequestedHiddenLayers { get; private set; }
 
-        public override string ToString() => System.Text.Json.JsonSerializer.Serialize(this, new JsonSerializerOptions { IncludeFields = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull | System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault });
+        public override string ToString() => System.Text.Json.JsonSerializer.Serialize(this, Program.DefaultJsonSerializeOptions);
 
         public enum RuntimeMode
         {

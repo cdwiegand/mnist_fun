@@ -55,7 +55,6 @@ namespace mnistfun
         public void SaveModel(RuntimeConfig config)
             => System.IO.File.WriteAllText(config.ModelFile, ToJson().ToString());
 
-
         public void SetInputNeurons(double[] input)
         {
             Layers.First.Value.SetNeurons(input);

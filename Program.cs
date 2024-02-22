@@ -13,31 +13,37 @@ namespace mnistfun
     internal class Program
     {
         static internal readonly Random rand = new Random();
-        private static Dictionary<int, char> VECTOR_MAPPING = new Dictionary<int, char>();
 
         static void Main(string[] args)
         {
-            Args theArgs = new Args(args);
+            RuntimeConfig config = new RuntimeConfig(args);
 
-            switch (theArgs.Mode)
+            switch (config.Mode)
             {
-                case Args.RuntimeMode.Running:
+                case RuntimeConfig.RuntimeMode.Running:
                     {
-                        LayerChain chains = LayerChain.LoadModel(theArgs);
-                        // FIXME run
+                        Runner runner = new Runner(config);
+                        SourceData source = SourceData.LoadRunningSource(config.RunFile, config);
+                        LayerChain chains = LayerChain.LoadModel(config);
+
+                        Console.WriteLine($"Loaded {source.Count} model data, now analysing...");
+                        runner.Run(source, chains);
                     }
                     break;
-                case Args.RuntimeMode.Training:
+                case RuntimeConfig.RuntimeMode.Training:
                     {
-                        Trainer trainer = new Trainer(VECTOR_MAPPING);
-                        SourceData trainingData = trainer.LoadTraining(theArgs);
-                        LayerChain chains = trainer.BuildTrainingLayers(trainingData);
-                        trainer.RunTraining(chains, trainingData);
-                        if (!string.IsNullOrEmpty(theArgs.ModelFile))
-                            chains.SaveModel(theArgs);
+                        Trainer trainer = new Trainer(config);
+                        SourceData source = SourceData.LoadTrainingSource(config.TrainingPath, config);
+                        LayerChain chains = trainer.BuildTrainingLayers(source);
+
+                        Console.WriteLine($"Loaded {source.Count} model data, now analysing...");
+                        trainer.RunTraining(chains, source);
+
+                        if (!string.IsNullOrEmpty(config.ModelFile))
+                            chains.SaveModel(config);
                     }
                     break;
-                default: throw new NotImplementedException("Unknown mode value: " + theArgs.Mode);
+                default: throw new NotImplementedException("Unknown mode value: " + config.Mode);
             }
         }
     }

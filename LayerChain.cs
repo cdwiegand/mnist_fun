@@ -24,17 +24,17 @@ namespace mnistfun
             return this;
         }
 
-        public static LayerChain LoadModel(Args theArgs)
+        public static LayerChain LoadModel(RuntimeConfig config)
         {
-            string json = System.IO.File.ReadAllText(theArgs.ModelFile);
+            string json = System.IO.File.ReadAllText(config.ModelFile);
             LayerChain ret = System.Text.Json.JsonSerializer.Deserialize<LayerChain>(json);
             return ret;
         }
 
-        public void SaveModel(Args theArgs)
+        public void SaveModel(RuntimeConfig config)
         {
             string json = System.Text.Json.JsonSerializer.Serialize(this);
-            System.IO.File.WriteAllText(theArgs.ModelFile, json);
+            System.IO.File.WriteAllText(config.ModelFile, json);
         }
 
         public void SetInputNeurons(double[] input)

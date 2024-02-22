@@ -23,7 +23,7 @@ namespace mnistfun
                 int matchedOutputNeuron = layers.Output.FindHighestValueOutputNeuron();
                 char matchedOutputChar = config.DevectorizeKey(matchedOutputNeuron);
 
-                Console.WriteLine($"{item.Character} from {item.LoadPath}");
+                Console.WriteLine($"{matchedOutputChar} from {item.LoadPath}");
             }
         }
 

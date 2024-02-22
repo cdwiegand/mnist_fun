@@ -21,31 +21,26 @@ namespace mnistfun
         public SourceData() { }
         public SourceData(IEnumerable<DataItem> src) => this.AddRange(src);
 
-        public static SourceData LoadTrainingSource(string path, RuntimeConfig config)
+        public static SourceData LoadTrainingSource(string path, RuntimeConfig config, SourceData? appendTo = null)
         {
-            SourceData sourceData = null;
+            SourceData sourceData = appendTo ?? new SourceData();
 
             if (System.IO.Directory.Exists(path))
             {
-                // assume mnist
-                string dirPath = FindPath(p => System.IO.File.Exists(System.IO.Path.Combine(p, "training", "0", "1.png")));
-
-                if (dirPath == null)
-                    throw new Exception("Please download the MNIST images, as pngs, such that there is a path training\\0\\1.png (or training/0/1.png)");
-
-                Console.WriteLine($"Using MNIST images from {dirPath}... please wait!");
-                sourceData = LoadPngImages(System.IO.Path.Join(dirPath, "training"));
+                foreach (var file in System.IO.Directory.GetDirectories(path))
+                    LoadTrainingSource(file, config, sourceData); // recurse
+                foreach (var file in System.IO.Directory.GetFiles(path))
+                    LoadTrainingSource(file, config, sourceData);
             }
             else if (System.IO.File.Exists(path))
             {
                 switch (System.IO.Path.GetExtension(path).Trim().ToLower().Replace(".", ""))
                 {
                     case "csv": sourceData = LoadCsvFile(path, config); break;
+                    case "png": sourceData.Add(LoadTrainingPngImage(path, new FileInfo(path).Directory.Name[0])); break; // ugly hack but works
+                    default: Console.WriteLine("W: Ignoring file " + path); break;
                 }
             }
-
-            if (sourceData == null)
-                throw new Exception("Don't know what to do, or invalid data (source) path provided!");
 
             return sourceData;
         }
@@ -57,7 +52,7 @@ namespace mnistfun
             if (System.IO.Directory.Exists(path))
             {
                 foreach (var file in System.IO.Directory.GetDirectories(path))
-                    sourceData.AddRange(LoadRunningSource(file, config)); // recurse
+                    LoadRunningSource(file, config, sourceData); // recurse
                 foreach (var file in System.IO.Directory.GetFiles(path))
                     LoadRunningSource(file, config, sourceData);
             }
@@ -71,9 +66,6 @@ namespace mnistfun
                 }
             }
 
-            if (sourceData == null || sourceData.Count == 0)
-                throw new Exception("Don't know what to do, or invalid data (source) path provided!");
-
             return sourceData;
         }
 
@@ -81,16 +73,18 @@ namespace mnistfun
         {
             // path to mnist csv or emnist csv
             var tempData = new SourceData();
+            int line = 0;
             using (var reader = new System.IO.StreamReader(loadPath))
             using (var csver = new CsvHelper.CsvReader(reader, System.Globalization.CultureInfo.InvariantCulture, false))
                 while (csver.Read()) // no header!
                 {
+                    line++;
                     int fieldMap = csver.GetField<int>(0);
                     int[] pixelsInt = new int[csver.ColumnCount - 1];
                     for (int i = 1; i < csver.ColumnCount; i++)
                         pixelsInt[i - 1] = csver.GetField<int>(i);
                     double[] pixels = pixelsInt.Select(p => (double)p / 256).ToArray();
-                    tempData.Add(new DataItem { Character = config.DevectorizeKey(fieldMap), Pixels = pixels, LoadPath = loadPath });
+                    tempData.Add(new DataItem { Character = config.DevectorizeKey(fieldMap), Pixels = pixels, LoadPath = $"{loadPath}:{line}" });
                 }
 
             return tempData;
@@ -127,7 +121,7 @@ namespace mnistfun
                     double pixel = ((double)image[x, y].R) / 256;
                     pixels[idx++] = pixel; // assign and more to next pixel
                 }
-            return new DataItem { Character = c, Pixels = pixels };
+            return new DataItem { Character = c, Pixels = pixels, LoadPath = file };
         }
         private static DataItem LoadRuntimePngImage(string file)
         {
@@ -140,7 +134,7 @@ namespace mnistfun
                     double pixel = ((double)image[x, y].R) / 256;
                     pixels[idx++] = pixel; // assign and more to next pixel
                 }
-            return new DataItem { Pixels = pixels };
+            return new DataItem { Pixels = pixels, LoadPath = file };
         }
     }
 }

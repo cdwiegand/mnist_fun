@@ -7,17 +7,18 @@ using System.Threading.Tasks;
 
 namespace mnistfun
 {
-    public class EpochResult
+    public class TrainingLoopResult
     {
-        public int EpochGeneration;
-        public DateTime StartTime;
-        public DateTime? EndTime;
+        public int LoopGeneration { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
         public TimeSpan? Duration => EndTime.HasValue ? EndTime.Value.Subtract(StartTime) : null;
 
-        public Dictionary<char, GuessResult> Characters = new Dictionary<char, GuessResult>();
+        public Dictionary<char, GuessResult> Characters { get; set; } = new Dictionary<char, GuessResult>();
         public int CountedCorrect => Characters.Select(p => p.Value.CountedRight).Sum();
         public int CountedWrong => Characters.Select(p => p.Value.CountedWrong).Sum();
         public int CountedTotal => Characters.Select(p => p.Value.CountedRight + p.Value.CountedWrong).Sum();
+        public decimal Accuracy => (decimal)CountedCorrect / (decimal)CountedTotal;
 
         public void CountRight(char number)
         {
@@ -33,25 +34,17 @@ namespace mnistfun
             Characters[number].CountWrong();
         }
 
-        public JsonNode ToJson()
-        {
-            JsonObject root = new JsonObject();
-            root["generation"] = EpochGeneration;
-            root["accuracy"] = Accuracy;
-            if (Duration.HasValue) root["duration"] = Duration.Value.TotalSeconds;
-            root["values"] = new JsonArray(Characters.OrderBy(p => p.Key).Select(p => p.Value.ToJson(p.Key)).ToArray());
-            return root;
-        }
+        public static TrainingLoopResult FromJson(JsonNode node) => System.Text.Json.JsonSerializer.Deserialize<TrainingLoopResult>(node, Program.DefaultJsonSerializeOptions);
+
+        public JsonNode ToJson() => System.Text.Json.JsonSerializer.Serialize(this, Program.DefaultJsonSerializeOptions);
 
         public override string ToString()
         {
-            string ret = $"\nEpoch {EpochGeneration}: {Accuracy:P3} @ {Duration}\n";
+            string ret = $"\nEpoch {LoopGeneration}: {Accuracy:P3} @ {Duration}\n";
             int idx = 0;
             foreach (char i in Characters.Keys.OrderBy(p => p))
                 ret += (idx++ % 12 == 0 ? "\n" : "") + $" {i}: {Characters[i].PercentStr}";
             return ret;
         }
-
-        public decimal Accuracy => (decimal)CountedCorrect / (decimal)CountedTotal;
     }
 }

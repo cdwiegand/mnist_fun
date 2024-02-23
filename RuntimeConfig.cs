@@ -46,7 +46,7 @@ namespace mnistfun
             if (!string.IsNullOrEmpty(hiddenlayers))
             {
                 // means we want a specific size setup
-                var tmp = hiddenlayers.Split(',', ':'); // 738:100:64:10 as an example or 738,40,10
+                var tmp = hiddenlayers.Split(',', ':'); // 100:64 as an example or 40,10
                 if (!tmp.All(p => int.TryParse(p, out _)))
                     throw new Exception("All hidden layer values --hiddenlayers:x,y,z must be ints!");
                 RequestedHiddenLayers = tmp.Select(p => int.Parse(p)).ToArray();

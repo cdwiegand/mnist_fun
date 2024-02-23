@@ -10,57 +10,54 @@ using static mnistfun.Program;
 namespace mnistfun
 {
     [Serializable]
-    public class LayerChain
+    public class Model
     {
         public LinkedList<InterLayerMatrix> Matrices { get; set; } = new LinkedList<InterLayerMatrix>();
         public LinkedList<Layer> Layers { get; set; } = new LinkedList<Layer>();
         public Layer Output => Layers.Last.Value;
+        public List<TrainingLoopResult> TrainingLoops { get; set; } = new List<TrainingLoopResult>();
 
-        public LayerChain Add(Layer layer)
+        public Model Add(Layer layer)
         {
             Layers.AddLast(layer);
             if (Layers.Count >= 2)
-            {
-                var matrix = new InterLayerMatrix(Layers.Last.Previous.Value, Layers.Last.Value);
-                Matrices.AddLast(matrix);
-            }
+                Matrices.AddLast(new InterLayerMatrix(Layers.Last.Previous.Value, Layers.Last.Value));
+
             return this;
         }
+        public Layer GetLayer(Guid id) => Layers.First(p => p.Id == id);
 
-        public JsonNode ToJson(IList<EpochResult>? results = null)
+        public JsonNode ToJson()
         {
             JsonObject root = new JsonObject();
-            if (results != null) 
-                root.Add("Phases", new JsonArray(results.Select(p => p.ToJson()).ToArray()));
+            root.Add("TrainingLoops", new JsonArray(TrainingLoops.Select(p => p.ToJson()).ToArray()));
             root.Add("Layers", new JsonArray(Layers.Select(p => p.ToJson()).ToArray()));
             root.Add("Matrices", new JsonArray(Matrices.Select(p => p.ToJson()).ToArray()));
             return root;
         }
-        public static LayerChain FromJson(JsonNode json)
+        public static Model FromJson(JsonNode json)
         {
-            var ret = new LayerChain();
-            foreach (JsonNode jn in json["Layers"].AsArray())
+            var ret = new Model();
+            foreach (JsonNode jn in json["Layers"]?.AsArray())
                 ret.Layers.AddLast(Layer.FromJson(jn));
-            foreach (JsonNode jn in json["Matrices"].AsArray())
+            foreach (JsonNode jn in json["Matrices"]?.AsArray())
                 ret.Matrices.AddLast(InterLayerMatrix.FromJson(jn, ret));
+            foreach (JsonNode jn in json["TrainingLoops"]?.AsArray())
+                ret.TrainingLoops.Add(TrainingLoopResult.FromJson(jn));
             return ret;
         }
 
-        public static LayerChain LoadModel(RuntimeConfig config)
+        public static Model LoadModel(RuntimeConfig config)
         {
             string json = System.IO.File.ReadAllText(config.ModelFile);
             var root = JsonObject.Parse(json);
-            LayerChain ret = FromJson(root);
+            Model ret = FromJson(root);
             return ret;
         }
 
-        public void SaveModel(RuntimeConfig config, IList<EpochResult>? results=null)
-            => System.IO.File.WriteAllText(config.ModelFile, ToJson(results).ToString());
+        public void SaveModel(RuntimeConfig config) => System.IO.File.WriteAllText(config.ModelFile, ToJson().ToString());
 
-        public void SetInputNeurons(double[] input)
-        {
-            Layers.First.Value.SetNeurons(input);
-        }
+        public void SetInputNeurons(double[] input) => Layers.First.Value.SetNeurons(input);
 
         public void ApplyMatricesForward()
         {
@@ -72,7 +69,7 @@ namespace mnistfun
         {
             var output = Layers.Last.Value;
             double[] deltaOutput = new double[output.Length];
-            for (int i = 0; i < output.Neurons.Length; i++)
+            for (int i = 0; i < output.Length; i++)
                 deltaOutput[i] = (output.Neurons[i] - (i == properMatchingOutputNeuron ? 1 : 0));
             return deltaOutput;
         }

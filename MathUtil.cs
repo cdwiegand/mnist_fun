@@ -28,10 +28,24 @@ namespace mnistfun
             for (int i2hl1 = 0; i2hl1 < matrix.GetLength(0); i2hl1++)
                 matrix[i2hl1] = rand.NextDouble() - 0.5;
         }
+        public static Dictionary<int, double> InitializeSingleMatrix(double countNeurons)
+        {
+            Dictionary<int, double> matrix = new Dictionary<int, double>();
+            for (int i = 0; i < countNeurons; i++) matrix[i] = 0;
+            return matrix;
+        }
+        public static void FillWithRandom(Random rand, Dictionary<int, double> matrix)
+        {
+            foreach (int key in matrix.Keys) matrix[key] = rand.NextDouble() - 0.5;
+        }
         public static void FillWithValue(double value, double[] matrix)
         {
             for (int i2hl1 = 0; i2hl1 < matrix.GetLength(0); i2hl1++)
                 matrix[i2hl1] = value;
+        }
+        public static void FillWithValue(double value, Dictionary<int, double> matrix)
+        {
+            foreach (int key in matrix.Keys) matrix[key] = value;
         }
         public static void FillWithRandom(Random rand, double[,] matrix)
         {

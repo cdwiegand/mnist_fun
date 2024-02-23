@@ -11,24 +11,22 @@ namespace mnistfun
     [Serializable]
     public class Layer
     {
-        [Obsolete("Do not use - this is for serialization only.")]
-        public Layer() { }
+        private Layer() { }
 
         public Layer(int countNeurons)
         {
-            Neurons = new double[countNeurons];
+            Neurons = MathUtil.InitializeSingleMatrix(countNeurons);
             MathUtil.FillWithRandom(Program.rand, Neurons);
         }
         public void SetNeurons(double[] values)
         {
-            Neurons = values;
+            for (int i = 0; i < values.Length; i++) Neurons[i] = values[i];
         }
 
         public Guid Id { get; set; } = Guid.NewGuid(); // default
-        public double[] Neurons { get; set; }
+        public Dictionary<int, double> Neurons { get; set; } = new Dictionary<int, double>();
 
-        public int Length => Neurons.Length;
-        public int Count => Neurons.Length;
+        public int Length => Neurons.Count;
 
         public JsonNode ToJson()
         {
@@ -41,14 +39,11 @@ namespace mnistfun
         {
             var ret = new Layer();
             ret.Id = json["Id"].Deserialize<Guid>();
-            ret.Neurons = json["Neurons"].Deserialize<double[]>();
+            ret.Neurons = json["Neurons"].Deserialize<Dictionary<int, double>>();
             return ret;
         }
 
-        public void Reset()
-        {
-            Neurons = new double[Length];
-        }
+        public void Reset() => Neurons = Neurons.Select(p => new KeyValuePair<int, double>(p.Key, 0)).ToDictionary(p => p.Key, p => p.Value);
 
         public double[,] CalculateBackpropagationMatrix(double[] errorCost, double learnRate)
         {
@@ -62,16 +57,10 @@ namespace mnistfun
 
         public int FindHighestValueOutputNeuron()
         {
-            double highestValue = double.MinValue;
-            int bestIdx = -1;
-            for (int idx = 0; idx < Neurons.Length; idx++)
-                if (Neurons[idx] > highestValue)
-                {
-                    highestValue = Neurons[idx];
-                    bestIdx = idx;
-                }
-
-            return bestIdx;
+            double highestValue = Neurons.Values.Max();
+            int idx = 0;
+            while (Neurons[idx] < highestValue) idx++; // have to iterate
+            return idx;
         }
     }
 }

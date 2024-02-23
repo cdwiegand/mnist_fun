@@ -16,7 +16,7 @@ namespace mnistfun
         {
             FromLayer = fromLayer;
             ToLayer = toLayer;
-            Matrix = new double[fromLayer.Neurons.Length, toLayer.Neurons.Length];
+            Matrix = new double[fromLayer.Length, toLayer.Length];
 
             MathUtil.FillWithRandom(Program.rand, Matrix);
         }
@@ -41,11 +41,11 @@ namespace mnistfun
             root.Add("Matrix", jsonMatrix);
             return root;
         }
-        public static InterLayerMatrix FromJson(JsonNode json, LayerChain chain)
+        public static InterLayerMatrix FromJson(JsonNode json, Model model)
         {
             Guid FromLayerId = json["FromLayerId"].Deserialize<Guid>();
             Guid ToLayerId = json["ToLayerId"].Deserialize<Guid>();
-            var ret = new InterLayerMatrix(chain.Layers.First(p => p.Id == FromLayerId), chain.Layers.First(p => p.Id == ToLayerId));
+            var ret = new InterLayerMatrix(model.GetLayer(FromLayerId), model.GetLayer(ToLayerId));
 
             JsonArray jsonMatrix = json["Matrix"].AsArray();
             int xCount = jsonMatrix.Count;

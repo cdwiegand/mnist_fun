@@ -11,52 +11,51 @@ namespace mnistfun
         public Trainer(RuntimeConfig config) { this.config = config; }
         private readonly RuntimeConfig config;
 
-        public LayerChain BuildTrainingLayers(SourceData sourceData)
+        public Model BuildTrainingLayers(SourceData sourceData)
         {
             int maxCountPixels = sourceData.Max(p => p.Pixels.Length); // should be 784
 
             // now, run through ML..
-            LayerChain layers = new LayerChain();
-            layers.Add(new Layer(maxCountPixels));
+            Model model = new Model();
+            model.Add(new Layer(maxCountPixels));
 
             if (config.RequestedHiddenLayers == null || config.RequestedHiddenLayers.Length == 0)
             {
-                layers.Add(new Layer((int)(maxCountPixels / Math.Log(maxCountPixels)))); // roughly 80 or so if MNIST
-                layers.Add(new Layer((int)Math.Sqrt(maxCountPixels))); // 28 if MNIST
+                model.Add(new Layer((int)(maxCountPixels / Math.Log(maxCountPixels)))); // roughly 80 or so if MNIST
+                model.Add(new Layer((int)Math.Sqrt(maxCountPixels))); // 28 if MNIST
             }
             else
             {
                 foreach (int i in config.RequestedHiddenLayers)
-                    layers.Add(new Layer(i)); // config already confirmed they are ints
+                    model.Add(new Layer(i)); // config already confirmed they are ints
             }
 
-            layers.Add(new Layer(sourceData.Select(p => p.Character).Distinct().Count())); // 10 if mnist if MNIST
+            model.Add(new Layer(sourceData.Select(p => p.Character).Distinct().Count())); // 10 if mnist if MNIST
 
-            return layers;
+            return model;
         }
 
-        public List<EpochResult> RunTraining(LayerChain layers, SourceData sourceData)
+        public void RunTraining(Model model, SourceData sourceData)
         {
-            var epochsTimesRightWrongs = new List<EpochResult>();
-            int epoch = 0;
+            int epoch = model.TrainingLoops.Count;
 
-            do
+            while (epoch < config.Loops)
             {
-                var res = new EpochResult() { EpochGeneration = epoch, StartTime=DateTime.UtcNow };
+                var res = new TrainingLoopResult() { LoopGeneration = epoch, StartTime = DateTime.UtcNow };
 
                 foreach (var item in sourceData.OrderBy(p => Guid.NewGuid()))
                 {
                     int properMatchingOutputNeuron = config.VectorizeKey(item.Character);
-                    layers.SetInputNeurons(item.Pixels);
-                    layers.ApplyMatricesForward();
+                    model.SetInputNeurons(item.Pixels);
+                    model.ApplyMatricesForward();
 
                     // ok, figure out error cost
-                    var deltaOutput = layers.GenerateOutputDelta(properMatchingOutputNeuron);
-                    layers.ApplyOutputDelta(deltaOutput);
-                    layers.BackpropagateDelta(deltaOutput);
+                    var deltaOutput = model.GenerateOutputDelta(properMatchingOutputNeuron);
+                    model.ApplyOutputDelta(deltaOutput);
+                    model.BackpropagateDelta(deltaOutput);
 
                     // ok, did the output match?
-                    int matchedOutputNeuron = layers.Output.FindHighestValueOutputNeuron();
+                    int matchedOutputNeuron = model.Output.FindHighestValueOutputNeuron();
                     char matchedOutputChar = config.DevectorizeKey(matchedOutputNeuron);
                     if (matchedOutputChar == item.Character)
                         res.CountRight(item.Character);
@@ -65,12 +64,10 @@ namespace mnistfun
                 }
 
                 res.EndTime = DateTime.UtcNow;
-                epochsTimesRightWrongs.Add(res);
+                model.TrainingLoops.Add(res);
                 Console.WriteLine(res);
                 epoch++;
-            } while (epoch < config.Loops);
-
-            return epochsTimesRightWrongs;
+            }
         }
     }
 }

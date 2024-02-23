@@ -11,16 +11,16 @@ namespace mnistfun
         public Runner(RuntimeConfig config) { this.config = config; }
         private readonly RuntimeConfig config;
 
-        public void Run(SourceData sourceData, LayerChain layers)
+        public void Run(SourceData sourceData, Model model)
         {
             foreach (var item in sourceData.OrderBy(p => Guid.NewGuid()))
             {
                 int properMatchingOutputNeuron = config.VectorizeKey(item.Character);
-                layers.SetInputNeurons(item.Pixels);
-                layers.ApplyMatricesForward();
+                model.SetInputNeurons(item.Pixels);
+                model.ApplyMatricesForward();
 
                 // ok, did the output match?
-                int matchedOutputNeuron = layers.Output.FindHighestValueOutputNeuron();
+                int matchedOutputNeuron = model.Output.FindHighestValueOutputNeuron();
                 char matchedOutputChar = config.DevectorizeKey(matchedOutputNeuron);
 
                 Console.WriteLine($"{matchedOutputChar} from {item.LoadPath}");

@@ -19,6 +19,7 @@ namespace mnistfun
             ModelFile = GetIfArg(args, "model");
             RuntimeMode mode = GetIfArg(args, "mode", p => Enum.TryParse(p, true, out RuntimeMode result) ? result : RuntimeMode.Detect);
             Loops = GetIfArg(args, "loops", p => int.TryParse(p, out int result) ? result : 3);
+            StopIfEveryoneMinQuality = GetIfArg<int?>(args, "stopAtQuality", p => int.TryParse(p, out int result) ? result : null);
             string? hiddenlayers = GetIfArg(args, "hiddenlayers");
 
             if (mode == RuntimeMode.Detect)
@@ -84,6 +85,7 @@ namespace mnistfun
         public RuntimeMode Mode { get; private set; }
         public int Loops { get; private set; }
         public int[] RequestedHiddenLayers { get; private set; }
+        public int? StopIfEveryoneMinQuality { get; private set; }
 
         public override string ToString() => System.Text.Json.JsonSerializer.Serialize(this, Program.DefaultJsonSerializeOptions);
 

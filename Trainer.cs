@@ -39,7 +39,7 @@ namespace mnistfun
         {
             int epoch = model.TrainingLoops.Count;
 
-            while (epoch < config.Loops)
+            while (epoch < config.Loops && (!config.StopIfEveryoneMinQuality.HasValue || model.TrainingLoops.Count == 0 || model.TrainingLoops.Any(p => p.WorstAccuracy < config.StopIfEveryoneMinQuality.Value)))
             {
                 var res = new TrainingLoopResult() { LoopGeneration = epoch, StartTime = DateTime.UtcNow };
 

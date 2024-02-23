@@ -46,5 +46,7 @@ namespace mnistfun
                 ret += (idx++ % 12 == 0 ? "\n" : "") + $" {i}: {Characters[i].PercentStr}";
             return ret;
         }
+
+        public decimal WorstAccuracy => Characters.Min(p => p.Value.Percent ?? 100); // percent is 0->1, so 100 is never the worst unless there is no data
     }
 }

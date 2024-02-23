@@ -17,31 +17,17 @@ namespace mnistfun
             TrainingPath = GetIfArg(args, "train");
             RunFile = GetIfArg(args, "run");
             ModelFile = GetIfArg(args, "model");
-            string? mode = GetIfArg(args, "mode");
-            string? loops = GetIfArg(args, "loops");
+            RuntimeMode mode = GetIfArg(args, "mode", p => Enum.TryParse(p, true, out RuntimeMode result) ? result : RuntimeMode.Detect);
+            Loops = GetIfArg(args, "loops", p => int.TryParse(p, out int result) ? result : 3);
             string? hiddenlayers = GetIfArg(args, "hiddenlayers");
 
-            switch ((mode ?? "").Trim().ToLower())
+            if (mode == RuntimeMode.Detect)
             {
-                case "train":
-                case "training":
-                    Mode = RuntimeMode.Training; break;
-                case "run":
-                case "running":
-                    Mode = RuntimeMode.Running; break;
-                default:
-                    // can we determine?
-                    if (!string.IsNullOrEmpty(TrainingPath)) { Mode = RuntimeMode.Training; break; }
-                    if (!string.IsNullOrEmpty(RunFile)) { Mode = RuntimeMode.Running; break; }
-                    throw new Exception("No valid --mode: specified, and can't infer usage!");
+                // can we determine?
+                if (!string.IsNullOrEmpty(TrainingPath)) Mode = RuntimeMode.Training;
+                else if (!string.IsNullOrEmpty(RunFile)) Mode = RuntimeMode.Running;
+                else throw new Exception("No valid --mode: specified, and can't infer usage!");
             }
-
-            if (!string.IsNullOrEmpty(loops))
-            {
-                if (int.TryParse(loops, out var loopVal)) Loops = loopVal;
-                else throw new Exception("Invalid --loops: value - must be a valid int!");
-            }
-            else Loops = 3; // default for training
 
             if (!string.IsNullOrEmpty(hiddenlayers))
             {
@@ -63,16 +49,16 @@ namespace mnistfun
                 VECTOR_MAPPING[i] = FILL_LETTERS[i];
         }
 
-        private static string? GetIfArg(string[] args, string name)
+        private static string? GetIfArg(string[] args, string name, string? defaultValue = null)
         {
-            string arg = args.FirstOrDefault(p => p.StartsWith($"--{name}:") || p.StartsWith($"--{name}="));
+            string? arg = args.FirstOrDefault(p => p.StartsWith($"--{name}:") || p.StartsWith($"--{name}="));
             if (string.IsNullOrEmpty(arg) && args.Any(p => p == "--" + name))
             {
                 // try the other form: --name valueHere
                 for (int i = 0; i < args.Length - 1; i++)
                     if (args[i] == "--" + name) return args[i + 1];
             }
-            if (string.IsNullOrEmpty(arg)) return null; // not present
+            if (string.IsNullOrEmpty(arg)) return defaultValue; // not present
 
             int idxColon = arg.IndexOf(':');
             int idxEqual = arg.IndexOf('=');
@@ -83,22 +69,30 @@ namespace mnistfun
             else if (idxEqual > -1)
                 return arg.Substring(idxEqual + 1);
             else
-                return null;
+                return defaultValue;
+        }
+        private static T? GetIfArg<T>(string[] args, string name, Func<string, T> conv)
+        {
+            string found = GetIfArg(args, name);
+            if (!string.IsNullOrEmpty(found)) return conv(found);
+            return default(T);
         }
 
-        public  string? TrainingPath { get; private set; }
-        public  string? RunFile { get; private set; }
-        public  string? ModelFile { get; private set; }
-        public  RuntimeMode Mode { get; private set; }
-        public  int Loops { get; private set; }
-        public  int[] RequestedHiddenLayers { get; private set; }
+        public string? TrainingPath { get; private set; }
+        public string? RunFile { get; private set; }
+        public string? ModelFile { get; private set; }
+        public RuntimeMode Mode { get; private set; }
+        public int Loops { get; private set; }
+        public int[] RequestedHiddenLayers { get; private set; }
 
         public override string ToString() => System.Text.Json.JsonSerializer.Serialize(this, Program.DefaultJsonSerializeOptions);
 
         public enum RuntimeMode
         {
+            Detect,
             Training,
             Running,
+            TrainMore,
         }
 
         // given an index (vector), what is the character?

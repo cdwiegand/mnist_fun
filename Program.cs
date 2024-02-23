@@ -41,11 +41,16 @@ namespace mnistfun
                         runner.Run(source, chains);
                     }
                     break;
+                case RuntimeConfig.RuntimeMode.TrainMore:
                 case RuntimeConfig.RuntimeMode.Training:
                     {
                         Trainer trainer = new Trainer(config);
                         SourceData source = SourceData.LoadTrainingSource(config.TrainingPath, config);
-                        Model chains = trainer.BuildTrainingLayers(source);
+                        Model chains = config.Mode switch
+                        {
+                            RuntimeConfig.RuntimeMode.Training => trainer.BuildTrainingLayers(source),
+                            RuntimeConfig.RuntimeMode.TrainMore => Model.LoadModel(config),
+                        };
 
                         Console.WriteLine($"Loaded {source.Count} model data, now analysing...");
                         trainer.RunTraining(chains, source);

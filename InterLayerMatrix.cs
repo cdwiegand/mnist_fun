@@ -16,9 +16,7 @@ namespace mnistfun
         {
             FromLayer = fromLayer;
             ToLayer = toLayer;
-            Matrix = new double[fromLayer.Length, toLayer.Length];
-
-            MathUtil.FillWithRandom(Program.rand, Matrix);
+            Matrix = MathNet.Numerics.LinearAlgebra.Matrix<double>.Build.Random(fromLayer.Length, toLayer.Length).ToArray();
         }
 
         public double[,] Matrix { get; set; }
@@ -74,7 +72,7 @@ namespace mnistfun
             {
                 double h_pre = 0;
                 for (int pix = 0; pix < Matrix.GetLength(0); pix++)
-                    // multiply them by the input -> hidden layer 1, then apply sigmoid function to that                            
+                    // multiply them by the left -> right layer, then apply sigmoid function to that                            
                     h_pre += FromLayer.Neurons[pix] * Matrix[pix, resultIdx];
                 ToLayer.Neurons[resultIdx] = MathUtil.Sigmoid(h_pre);
             }
